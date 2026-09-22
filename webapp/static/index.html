@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>IFC Audit</title>
 <link rel="stylesheet" href="/static/styles.css">
+<!-- The 3D viewer (static/viewer.js) is loaded on demand from these CDNs. -->
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.0/examples/jsm/",
+    "web-ifc": "https://cdn.jsdelivr.net/npm/web-ifc@0.0.78/web-ifc-api.js"
+} }
+</script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>🏗️</text></svg>">
 </head>
 <body>
@@ -74,9 +82,13 @@
       </div>
     </div>
 
+    <div class="banner" id="fixBanner" hidden></div>
+
     <div class="tabs">
       <button class="tab on" data-pane="paneOverview">Overview</button>
       <button class="tab" data-pane="paneIssues">Issues</button>
+      <button class="tab" data-pane="paneFix">Fix</button>
+      <button class="tab" data-pane="pane3d">3D</button>
       <button class="tab" data-pane="paneData">Data</button>
       <button class="tab" data-pane="paneFiles">Downloads</button>
     </div>
@@ -118,6 +130,49 @@
       <div id="groups"></div>
     </div>
 
+    <div class="pane" id="paneFix" hidden>
+      <div class="note">
+        Review the proposed fixes, fill in any values, and approve the ones you
+        want. They are written to a <b>new copy</b> of the model, which is then
+        re-audited. The file you uploaded is never modified, and both files
+        stay available under Downloads.
+      </div>
+      <div class="fix-summary" id="fixSummary"></div>
+      <div id="fixGroups"></div>
+      <div class="fixbar" id="fixBar" hidden>
+        <span id="fixCount">0 fixes selected</span>
+        <span class="fixerr" id="fixErr"></span>
+        <span class="spacer"></span>
+        <button class="btn sm" id="fixAllAuto" type="button">Select all auto fixes</button>
+        <button class="btn primary" id="fixApply" type="button" disabled>Apply to a copy</button>
+      </div>
+    </div>
+
+    <div class="pane" id="pane3d" hidden>
+      <div class="v3d-bar">
+        <button class="btn sm" id="v3dFit" type="button">Fit</button>
+        <label><input type="checkbox" id="v3dColour" checked> Colour by issues</label>
+        <label><input type="checkbox" id="v3dXray"> X-ray</label>
+        <button class="btn sm" id="v3dIsoFlagged" type="button">Only elements with issues</button>
+        <button class="btn sm" id="v3dIsoSel" type="button" disabled>Isolate selected</button>
+        <button class="btn sm" id="v3dShowAll" type="button">Show all</button>
+        <label class="v3d-sec">Section
+          <input type="range" id="v3dSection" min="0" max="100" value="100"></label>
+      </div>
+      <div class="v3d">
+        <div class="v3d-canvas" id="v3dCanvas">
+          <div class="v3d-msg" id="v3dMsg">Open this tab to load the model.</div>
+        </div>
+        <aside class="v3d-side">
+          <div class="legend" id="v3dLegend"></div>
+          <div id="v3dInfo" class="v3d-info">
+            <p class="hint">Click an element to see its issues. Drag to orbit,
+              right-drag to pan, scroll to zoom.</p>
+          </div>
+        </aside>
+      </div>
+    </div>
+
     <div class="pane" id="paneData" hidden>
       <div class="panel">
         <h2>Ask a question</h2>
@@ -125,6 +180,7 @@
           <input id="question" placeholder="How many doors have no fire rating?">
           <button class="btn primary" id="askBtn">Ask</button>
         </div>
+        <div class="examples" id="askExamples"></div>
         <div id="askNote"></div>
       </div>
 

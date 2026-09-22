@@ -38,6 +38,8 @@ ifcaudit/        the engine — knows nothing about HTTP. Never import webapp fr
   engine.py      @rule registry and runner
   rules/         integrity.py (L1), project.py (L0/L1), schema_check.py (L0), ids_runner.py (L2)
   report/        console / html / json
+  fixes/         @fixer proposals + apply (builtin.py holds the fixers)
+  diff.py        run-to-run diff on the stable ids
 
 webapp/          the web layer
   main.py        FastAPI routes
@@ -45,7 +47,7 @@ webapp/          the web layer
   sql_export.py  IFC → SQLite, read-only query guard
   nlq.py         question → SQL → answer
   exports.py     Excel workbook + CSV
-  static/        index.html, app.js, styles.css — no build step, no framework
+  static/        index.html, app.js, styles.css, viewer.js — no build step, no framework
 ```
 
 ### Check layers
@@ -85,12 +87,38 @@ IFCflow's `server-python-executor.ts`, which regex-matches Python and
 reimplements it in TypeScript, so unrecognised input gets a plausible wrong
 answer. Never add a "best effort" path here.
 
+**Answer wording is a template, numbers are not.** The model returns
+`{"sql", "answer"}`; `answer` uses `{column}` placeholders that
+`nlq.fill_answer` fills from the result rows. A template with any digit of its
+own, or naming a column the query didn't return, is dropped. The audit is
+written into the same SQLite file (`audit_file`, `audit_issues`,
+`audit_issue_elements`, `audit_ids`) so questions about issues get the same
+guarantee.
+
 **SQL is read-only.** Single statement, must start with SELECT/WITH, no
 PRAGMA/ATTACH/DDL/DML, executed over a `mode=ro` connection. See
 `sql_export.is_safe`.
 
 **A rule that crashes becomes an issue, not an exception.** `engine.run`
 catches per-rule so one bad rule never kills an audit.
+
+**Fixes never touch the uploaded file.** Approving fixes creates a *new* job:
+`original.ifc` (byte copy of the source), `model.ifc` (fixed), `changes.json`
+(every fix, its values, its outcome). The parent job's directory is never
+written to. The copy is then re-audited and diffed against the parent.
+
+**The client never sends operations.** A `Fix` carries its `ops` as data,
+generated server-side from the model; the apply endpoint takes only issue ids
+and values, re-validates them (`fixes.coerce`) and uses the server's own
+proposals. Ops address elements by STEP id, not GUID, because GUIDs can be
+duplicated and the copy is byte-identical so STEP ids stay valid.
+
+**Fixers never invent values.** A fixer may *suggest* something derived
+deterministically from the model (storey from an element's z, the next storey
+elevation from the spacing) and must say how in `inferred`. Fire ratings,
+materials, coordinates and the like always come from the user. Issues that
+can't be repaired in the IFC (no geometry, proxies, schema violations) are
+`MANUAL` with advice text, never a guess.
 
 ## Adding a rule
 
@@ -119,14 +147,20 @@ def ceiling_height(ctx):
 Drop it in `ifcaudit/rules/`, import it in `rules/__init__.py`. The `evidence`
 dict should always carry a `key` — it feeds the stable id.
 
+If the defect can be repaired inside the IFC, add a fixer in
+`ifcaudit/fixes/builtin.py` with `@fixer("YOUR.RULE_ID")` returning a `Fix`
+(`AUTO` / `INPUT`). Otherwise add a line to `ADVICE` in `fixes/__init__.py`.
+
 ## The pipeline
 
 `STEP_LABELS` in `webapp/jobs.py` **is** the workflow graph, already authored:
 
 ```
-receive → parse → validate schema → check IDS → run rules
+receive → [apply fixes] → parse → validate schema → check IDS → run rules
         → build SQLite → generate reports
 ```
+
+`apply fixes` only appears on a fixed copy (`Job.steps` filters it out otherwise).
 
 IDS runs before rules because `ifcaudit.run` takes `extra_issues`, which must be
 collected first. If you reorder execution, reorder `STEP_LABELS` to match or the
@@ -139,7 +173,7 @@ REM terminal 1
 python serve.py --no-open --port 8112
 
 REM terminal 2
-python tests\test_e2e.py           REM 28 browser checks, real Chromium, no mocks
+python tests\test_e2e.py           REM 36 browser checks, real Chromium, no mocks
 python tests\test_nlq_stub.py      REM text-to-SQL chain, no API key needed
 ```
 
@@ -150,7 +184,7 @@ defects and the ruleset catches all twelve — the table is in README.md. If you
 add a rule, add a matching defect to the sample generator.
 
 Expected result on the sample: **21 errors, 35 warnings, 54 info** over 29
-elements, 27 SQLite tables, ~3s end to end. If those numbers move, understand
+elements, 31 SQLite tables, ~3s end to end. If those numbers move, understand
 why before committing.
 
 **False-positive baseline.** `python tools\make_sample.py examples\clean_model.ifc --clean`
@@ -176,9 +210,10 @@ inverted so it is authored once rather than dragged per use.
 
 ## Not built yet, in rough priority order
 
-1. **3D viewer** — "click an issue → see the element highlighted". `Issue.location`
-   and the stable ids are already in place. Build on `web-ifc` + `three.js`
-   directly, not on IFCflow's wrapper.
+1. **3D viewer**: built (`static/viewer.js`, the 3D tab). web-ifc + three.js
+   from jsDelivr via the import map in `index.html`, so it needs internet.
+   Elements join to the audit by STEP id = web-ifc expressID
+   (`/api/jobs/<id>/elements`). Next: side-by-side original vs fixed copy.
 2. **Clash detection (L4)** — `ifcopenshell.geom.tree`, `clash_intersection_many` /
    `clash_clearance_many`. Two things first: check georeferencing
    (`PRJ.GEOREFERENCE` already does — misaligned models give either zero clashes
@@ -186,8 +221,9 @@ inverted so it is authored once rather than dragged per use.
    one issue, not forty).
 3. **BCF export** — without it, issues can't round-trip into Revit / Navisworks /
    BIMcollab.
-4. **Run-to-run diffing** — ~40 lines on the stable ids: load the previous JSON,
-   compare id sets, report new / resolved / persisting.
+4. **Run-to-run diffing** — `ifcaudit/diff.py` exists and the fix flow uses it
+   (parent vs fixed copy). Still missing: diffing two independent uploads of
+   the same model, and a CLI flag (`audit.py --baseline previous.json`).
 5. **Multi-file federation** — `AuditContext` wraps one model today.
    `ElementRef.source_file` is already in the schema for when it wraps several.
 
@@ -203,6 +239,7 @@ real queue, object storage and auth.
 |---|---|---|
 | `OPENAI_API_KEY` / `OPENROUTER_API_KEY` | unset | enables the Ask box |
 | `IFC_NLQ_MODEL` | `gpt-4o-mini` | model for text-to-SQL |
-| `OPENAI_BASE_URL` | OpenAI | any OpenAI-compatible endpoint |
+| `OPENAI_BASE_URL` | OpenAI | any OpenAI-compatible endpoint (Claude: `https://api.anthropic.com/v1`) |
+| `ANTHROPIC_WORKSPACE_ID` | unset | sent as `anthropic-workspace-id`; needed for Anthropic keys not scoped to a workspace |
 | `IFC_MAX_UPLOAD_MB` | 500 | upload cap |
 | `IFC_DATA_DIR` | `./data` | where job data goes |

@@ -159,7 +159,7 @@ def main() -> int:
             "OPENROUTER_API_KEY")
         if configured:
             check("answers are backed by a visible SQL query",
-                  "Ran this query" in note, note[:90])
+                  "SQL behind this answer" in note, note[:90])
         else:
             check("degrades honestly without an API key",
                   "No language model is configured" in note, note[:90])
@@ -192,6 +192,37 @@ def main() -> int:
         page.wait_for_selector("#viewResult:not([hidden])", timeout=20_000)
         check("can reopen a finished run", page.is_visible("#kpis"))
         page.screenshot(path="/tmp/e2e_results.png", full_page=False)
+
+        print("\n11. 3D viewer (needs internet for three.js / web-ifc)")
+        page.click(".tab[data-pane='paneIssues']")
+        page.click("#groups [data-guid]")
+        page.wait_for_function(
+            "() => { const m = document.getElementById('v3dMsg');"
+            " return m.hidden || m.classList.contains('err'); }", timeout=120_000)
+        loaded = page.eval_on_selector("#v3dMsg", "m => m.hidden")
+        check("3D model loads", loaded, page.text_content("#v3dMsg"))
+        check("issue opens its element in 3D",
+              "GlobalId" in page.inner_text("#v3dInfo"), page.inner_text("#v3dInfo")[:80])
+
+        print("\n12. Fix: apply the auto fixes to a copy")
+        page.click(".tab[data-pane='paneFix']")
+        page.wait_for_selector("#fixBar:not([hidden])", timeout=60_000)
+        autos = page.eval_on_selector_all(".fsel[data-kind='auto']", "e => e.length")
+        check("auto fixes proposed", autos == 3, f"got {autos}")
+        manual = page.eval_on_selector_all(".group.manual", "e => e.length")
+        check("unfixable issues shown as manual advice", manual >= 3, f"got {manual}")
+        page.click("#fixAllAuto")
+        page.once("dialog", lambda d: d.accept())   # confirms the deletions
+        page.click("#fixApply")
+        page.wait_for_selector("#fixBanner:not([hidden])", timeout=180_000)
+        banner = " ".join(page.inner_text("#fixBanner").split())
+        check("fixed copy re-audited", "3 fixes applied" in banner, banner[:120])
+        check("fixes verified by the re-audit", " 0 new " in f" {banner} ", banner[:160])
+        page.click(".tab[data-pane='paneFiles']")
+        hrefs = page.eval_on_selector_all(
+            "#downloads a", "e => e.map(a => a.getAttribute('href').split('/').pop())")
+        check("fixed and original IFC both downloadable",
+              "ifc" in hrefs and "original" in hrefs and "changes" in hrefs, str(hrefs))
 
         real_errors = [e for e in console_errors
                        if "favicon" not in e.lower()]

@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ifc-audit",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": ["serve.py", "--no-open", "--port", "8112"],
+      "port": 8112,
+      "env": { "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1" }
+    }
+  ]
+}

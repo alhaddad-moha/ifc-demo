@@ -131,6 +131,9 @@ DOWNLOADS = {
     "csv": ("issues.csv", "text/csv"),
     "db": ("model.db", "application/vnd.sqlite3"),
     "ifc": ("model.ifc", "application/octet-stream"),
+    # Only on a fixed copy: the file it was fixed from, and what changed.
+    "original": ("original.ifc", "application/octet-stream"),
+    "changes": ("changes.json", "application/json"),
 }
 
 
@@ -147,8 +150,12 @@ def download(job_id: str, kind: str):
         raise HTTPException(404, f"{name} was not produced for this run.")
     stem = os.path.splitext(job.filename)[0]
     suffix = os.path.splitext(name)[1]
-    return FileResponse(path, media_type=media,
-                        filename=f"{stem}_audit{suffix}")
+    download_name = {
+        "ifc": job.filename,
+        "original": job.parent_filename or job.filename,
+        "changes": f"{stem}_changes.json",
+    }.get(kind, f"{stem}_audit{suffix}")
+    return FileResponse(path, media_type=media, filename=download_name)
 
 
 @app.get("/api/jobs/{job_id}/report", response_class=HTMLResponse)
@@ -158,6 +165,74 @@ def inline_report(job_id: str) -> HTMLResponse:
         raise HTTPException(404, "No report for this job.")
     with open(job.path("report.html"), encoding="utf-8") as fh:
         return HTMLResponse(fh.read())
+
+
+@app.get("/api/jobs/{job_id}/elements")
+def job_elements(job_id: str) -> dict[str, Any]:
+    job = jobs.get(job_id)
+    if job is None:
+        raise HTTPException(404, "No such job.")
+    if job.status != "done":
+        raise HTTPException(409, f"Job is {job.status}.")
+    return {"elements": jobs.elements(job)}
+
+
+# --------------------------------------------------------------------------
+# fixes
+# --------------------------------------------------------------------------
+
+MAX_FIXES = 5000
+
+
+def _require_done(job_id: str):
+    job = jobs.get(job_id)
+    if job is None:
+        raise HTTPException(404, "No such job.")
+    if job.status != "done":
+        raise HTTPException(409, f"Job is {job.status}.")
+    return job
+
+
+@app.get("/api/jobs/{job_id}/fixes")
+def fix_proposals(job_id: str) -> dict[str, Any]:
+    job = _require_done(job_id)
+    return {"fixes": [f.to_dict() for f in jobs.proposals(job)]}
+
+
+@app.post("/api/jobs/{job_id}/fixes/apply")
+def apply_fixes(job_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Apply approved fixes to a copy. The client sends issue ids and values;
+    the operations come from the server's own proposals, never the request."""
+    from ifcaudit import fixes
+
+    job = _require_done(job_id)
+    wanted = payload.get("fixes") or []
+    if not isinstance(wanted, list) or not wanted:
+        raise HTTPException(400, "Select at least one fix.")
+    if len(wanted) > MAX_FIXES:
+        raise HTTPException(400, f"At most {MAX_FIXES} fixes per run.")
+
+    by_id = {f.issue_id: f for f in jobs.proposals(job)}
+    selected, values, errors = [], {}, []
+    for item in wanted:
+        fix = by_id.get(str((item or {}).get("issue_id", "")))
+        if fix is None or fix.kind == fixes.MANUAL:
+            continue
+        raw = item.get("values") or {}
+        try:
+            fixes.coerce(fix, raw if isinstance(raw, dict) else {})
+        except ValueError as exc:
+            errors.append(f"{fix.element}: {exc}")
+            continue
+        selected.append(fix)
+        values[fix.issue_id] = raw
+    if errors:
+        raise HTTPException(400, "; ".join(errors[:5])
+                            + (f" (+{len(errors) - 5} more)" if len(errors) > 5 else ""))
+    if not selected:
+        raise HTTPException(400, "None of the selected issues has an applicable fix.")
+
+    return jobs.create_fixed(job, selected, values).to_dict()
 
 
 # --------------------------------------------------------------------------

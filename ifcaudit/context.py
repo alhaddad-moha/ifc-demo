@@ -104,6 +104,16 @@ class AuditContext:
         return list(self.model.by_type("IfcSpace"))
 
     @cached_property
+    def guid_index(self) -> dict[str, list]:
+        """GlobalId -> entities. A list, because duplicated GUIDs are exactly
+        what some rules find — by_guid() would silently return just one."""
+        out: dict[str, list] = {}
+        for el in self.model.by_type("IfcRoot"):
+            if el.GlobalId:
+                out.setdefault(el.GlobalId, []).append(el)
+        return out
+
+    @cached_property
     def storey_of(self) -> dict[int, str]:
         """element id -> storey name. Resolved once, reused by every rule."""
         out: dict[int, str] = {}

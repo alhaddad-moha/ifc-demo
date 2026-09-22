@@ -270,7 +270,9 @@ def build_clean(path: str) -> None:
         el = ifcopenshell.api.root.create_entity(
             f, ifc_class=ifc_class, name=name, predefined_type=predefined_type
         )
-        el.ObjectPlacement = placement(f, xyz)
+        # Placements are absolute, so each floor is lifted to its storey.
+        x, y, z = xyz
+        el.ObjectPlacement = placement(f, (x, y, z + storey.Elevation))
         el.Representation = box_representation(f, body, *size)
         ifcopenshell.api.spatial.assign_container(
             f, products=[el], relating_structure=storey
@@ -307,7 +309,7 @@ def build_clean(path: str) -> None:
             f, ifc_class="IfcSpace", name=f"SP-{tag}-01", predefined_type="INTERNAL"
         )
         space.LongName = "Open office"
-        space.ObjectPlacement = placement(f, (0.0, 200.0, 0.0))
+        space.ObjectPlacement = placement(f, (0.0, 200.0, storey.Elevation))
         space.Representation = box_representation(f, body, 20000.0, 7800.0, 3000.0)
         ifcopenshell.api.aggregate.assign_object(f, products=[space], relating_object=storey)
         pset = ifcopenshell.api.pset.add_pset(f, product=space, name="Pset_SpaceCommon")
