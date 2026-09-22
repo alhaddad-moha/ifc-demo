@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IFC Audit</title>
+<link rel="stylesheet" href="/static/styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>🏗️</text></svg>">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="mark">IA</span> IFC Audit</div>
+  <span class="chip" id="nlqChip" hidden></span>
+  <div class="spacer"></div>
+  <button class="btn sm ghost" id="homeBtn" hidden>New audit</button>
+  <button class="btn sm ghost" id="themeBtn">Theme</button>
+</div>
+
+<div class="wrap">
+
+  <!-- ============ UPLOAD ============ -->
+  <section class="view" id="viewUpload">
+    <div class="hero">
+      <h1>Upload a model, get the full analysis</h1>
+      <p>Schema validation, data-integrity rules, IDS requirements and a
+         queryable database — one pass, no configuration.</p>
+    </div>
+
+    <div class="drop" id="drop">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5"/>
+        <path d="M3 15v3a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3v-3"/>
+      </svg>
+      <div class="big">Drop an IFC file here</div>
+      <div class="small">or click to choose &middot; <span id="limitTxt">.ifc</span></div>
+      <input type="file" id="fileInput" accept=".ifc,.ifczip" hidden>
+    </div>
+
+    <div class="options">
+      <label><input type="checkbox" id="optSchema" checked> Validate schema</label>
+      <label><input type="checkbox" id="optDb" checked> Build queryable database</label>
+      <label><input type="checkbox" id="optIds" checked> Apply IDS requirements</label>
+      <label>
+        <span id="idsName" style="color:var(--muted)"></span>
+        <button class="btn sm ghost" id="idsBtn" type="button">Use my own IDS</button>
+        <input type="file" id="idsInput" accept=".ids,.xml" hidden>
+      </label>
+    </div>
+
+    <div class="recent" id="recent" hidden>
+      <h2>Recent runs</h2>
+      <div id="recentList"></div>
+    </div>
+  </section>
+
+  <!-- ============ PROGRESS ============ -->
+  <section class="view" id="viewProgress" hidden>
+    <div class="hero">
+      <h1 id="progTitle">Analysing…</h1>
+      <p id="progSub">This runs in the background — the page updates as it goes.</p>
+    </div>
+    <div class="steps" id="steps"></div>
+    <div class="log" id="logBox"></div>
+  </section>
+
+  <!-- ============ RESULTS ============ -->
+  <section class="view" id="viewResult" hidden>
+    <div class="result-head">
+      <div>
+        <h1 id="resTitle">Results</h1>
+        <div class="meta" id="resMeta"></div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab on" data-pane="paneOverview">Overview</button>
+      <button class="tab" data-pane="paneIssues">Issues</button>
+      <button class="tab" data-pane="paneData">Data</button>
+      <button class="tab" data-pane="paneFiles">Downloads</button>
+    </div>
+
+    <div class="pane" id="paneOverview">
+      <div class="kpis" id="kpis"></div>
+      <div class="panel">
+        <h2>Severity distribution</h2>
+        <div class="bar" id="sevBar" role="img" aria-label="severity distribution"></div>
+        <div class="legend" id="sevLegend"></div>
+      </div>
+      <div class="panel" id="idsPanel" hidden>
+        <h2 id="idsTitle">Information requirements</h2>
+        <table><thead><tr><th>Result</th><th>Specification</th>
+          <th>Applicable</th><th>Passed</th><th>Failed</th></tr></thead>
+          <tbody id="idsRows"></tbody></table>
+      </div>
+      <div class="panel">
+        <h2>Element breakdown</h2>
+        <div class="scroll" style="max-height:300px">
+          <table><thead><tr><th>IFC class</th><th>Count</th></tr></thead>
+            <tbody id="classRows"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <div class="pane" id="paneIssues" hidden>
+      <div class="filters">
+        <input id="q" type="search" placeholder="Search rule, element, GUID or text…">
+        <select id="sev">
+          <option value="">All severities</option>
+          <option value="error">Errors only</option>
+          <option value="warning">Warnings only</option>
+          <option value="info">Info only</option>
+        </select>
+        <select id="cat"><option value="">All categories</option></select>
+        <span class="count" id="issueCount"></span>
+      </div>
+      <div id="groups"></div>
+    </div>
+
+    <div class="pane" id="paneData" hidden>
+      <div class="panel">
+        <h2>Ask a question</h2>
+        <div class="sqlbar">
+          <input id="question" placeholder="How many doors have no fire rating?">
+          <button class="btn primary" id="askBtn">Ask</button>
+        </div>
+        <div id="askNote"></div>
+      </div>
+
+      <div class="panel">
+        <h2>SQL console</h2>
+        <textarea class="sql" id="sqlBox"
+          spellcheck="false">SELECT ifc_class, COUNT(*) AS n FROM id_map
+GROUP BY ifc_class ORDER BY n DESC</textarea>
+        <div style="display:flex;gap:10px;margin-top:11px;align-items:center">
+          <button class="btn primary" id="runSql">Run query</button>
+          <button class="btn sm" id="dlCsv">Download CSV</button>
+          <span class="count" id="sqlCount"></span>
+        </div>
+        <div class="examples" id="examples"></div>
+        <div id="sqlOut"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Tables in this model</h2>
+        <div class="scroll" style="max-height:260px">
+          <table><thead><tr><th>Table</th><th>Rows</th></tr></thead>
+            <tbody id="tableRows"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <div class="pane" id="paneFiles" hidden>
+      <div class="dl" id="downloads"></div>
+    </div>
+  </section>
+
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

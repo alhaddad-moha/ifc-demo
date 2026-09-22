@@ -1,0 +1,86 @@
+<?xml version='1.0' encoding='utf-8'?>
+<ids xmlns="http://standards.buildingsmart.org/IDS" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://standards.buildingsmart.org/IDS http://standards.buildingsmart.org/IDS/1.0/ids.xsd">
+    <info>
+        <title>RND Demo — Employer Information Requirements</title>
+        <version>1.0</version>
+        <description>Minimum information requirements for handover models.</description>
+        <author>fortech.sa7@gmail.com</author>
+        <date>2026-09-22</date>
+        <purpose>Demonstration ruleset for the ifc-demo auditor</purpose>
+    </info>
+    <specifications>
+        <specification name="Doors carry a fire rating" ifcVersion="IFC4" identifier="REQ-DR-001" description="All doors must declare Pset_DoorCommon.FireRating." instructions="Set the fire rating parameter before export.">
+            <applicability minOccurs="0" maxOccurs="unbounded">
+                <entity>
+                    <name>
+                        <simpleValue>IFCDOOR</simpleValue>
+                    </name>
+                </entity>
+            </applicability>
+            <requirements>
+                <property dataType="IFCLABEL" cardinality="required" instructions="Required for fire-strategy review.">
+                    <propertySet>
+                        <simpleValue>Pset_DoorCommon</simpleValue>
+                    </propertySet>
+                    <baseName>
+                        <simpleValue>FireRating</simpleValue>
+                    </baseName>
+                </property>
+            </requirements>
+        </specification>
+        <specification name="Walls declare IsExternal" ifcVersion="IFC4" identifier="REQ-WAL-001" description="All walls must declare Pset_WallCommon.IsExternal.">
+            <applicability minOccurs="0" maxOccurs="unbounded">
+                <entity>
+                    <name>
+                        <simpleValue>IFCWALL</simpleValue>
+                    </name>
+                </entity>
+            </applicability>
+            <requirements>
+                <property dataType="IFCBOOLEAN" cardinality="required" instructions="Drives the thermal envelope take-off.">
+                    <propertySet>
+                        <simpleValue>Pset_WallCommon</simpleValue>
+                    </propertySet>
+                    <baseName>
+                        <simpleValue>IsExternal</simpleValue>
+                    </baseName>
+                </property>
+            </requirements>
+        </specification>
+        <specification name="Slabs are named" ifcVersion="IFC4" identifier="REQ-GEN-001" description="All slabs must carry a Name attribute.">
+            <applicability minOccurs="0" maxOccurs="unbounded">
+                <entity>
+                    <name>
+                        <simpleValue>IFCSLAB</simpleValue>
+                    </name>
+                </entity>
+            </applicability>
+            <requirements>
+                <attribute cardinality="required">
+                    <name>
+                        <simpleValue>Name</simpleValue>
+                    </name>
+                </attribute>
+            </requirements>
+        </specification>
+        <specification name="Windows declare thermal transmittance" ifcVersion="IFC4" identifier="REQ-WIN-001" description="Windows must declare Pset_WindowCommon.ThermalTransmittance." instructions="Required for the SBC energy compliance submission.">
+            <applicability minOccurs="0" maxOccurs="unbounded">
+                <entity>
+                    <name>
+                        <simpleValue>IFCWINDOW</simpleValue>
+                    </name>
+                </entity>
+            </applicability>
+            <requirements>
+                <property dataType="IFCTHERMALTRANSMITTANCEMEASURE" cardinality="required">
+                    <propertySet>
+                        <simpleValue>Pset_WindowCommon</simpleValue>
+                    </propertySet>
+                    <baseName>
+                        <simpleValue>ThermalTransmittance</simpleValue>
+                    </baseName>
+                </property>
+            </requirements>
+        </specification>
+    </specifications>
+</ids>

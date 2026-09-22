@@ -1,0 +1,23 @@
+# --- audit engine -----------------------------------------------------
+# Core IFC parsing, geometry engine and utilities
+ifcopenshell>=0.8.5
+
+# IDS (Information Delivery Specification) validation — buildingSMART standard
+ifctester>=0.8.5
+
+# IFC -> SQLite (the Ifc2Sql recipe). Powers the SQL console and AI queries.
+ifcpatch>=0.8.5
+
+# Required by ifcopenshell.validate to evaluate EXPRESS rules (--schema-check).
+# Without it, attribute/type validation still runs but EXPRESS rules are skipped.
+pytest>=8.0
+
+# --- web app ----------------------------------------------------------
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+openpyxl>=3.1
+
+# --- tests (optional) -------------------------------------------------
+# End-to-end browser test:  pip install playwright && playwright install chromium
+# playwright>=1.44
