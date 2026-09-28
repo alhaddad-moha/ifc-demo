@@ -506,6 +506,17 @@
     });
   }
 
+  // New issues are only alarming if they are errors or warnings.
+  function newSpan(d) {
+    var by = d.new_by_severity || {}, n = d.new || 0;
+    var serious = (by.error || 0) + (by.warning || 0);
+    var parts = ["error", "warning", "info"].filter(function (s) {
+      return by[s];
+    }).map(function (s) { return by[s] + " " + s; });
+    return "<span" + (serious ? ' class="bad"' : "") + "><b>" + n + "</b> new" +
+      (parts.length ? " (" + parts.join(", ") + ")" : "") + "</span>";
+  }
+
   function renderBanner(payload) {
     var b = $("fixBanner");
     if (!payload.parent_id || !payload.changes) { b.hidden = true; return; }
@@ -522,8 +533,7 @@
       (c.failed ? '<span class="bad"><b>' + c.failed + "</b> failed</span>" : "") +
       (c.skipped ? "<span><b>" + c.skipped + "</b> skipped</span>" : "") +
       '<span class="ok"><b>' + (d.resolved || 0) + "</b> issues resolved</span>" +
-      "<span" + (d.new ? ' class="bad"' : "") + "><b>" + (d.new || 0) +
-      "</b> new</span>" +
+      newSpan(d) +
       "<span><b>" + (d.after || 0) + "</b> remaining</span>" +
       (d.carried ? "<span title='Same defects on elements that got a new GlobalId'><b>" +
         d.carried + "</b> carried to a new GUID</span>" : "") +
@@ -677,9 +687,14 @@
       }
 
       var rows = g.map(function (f) {
+        // "Suggested" = the fixer derived every value itself and said how.
+        var suggested = f.inferred && f.fields.length && f.fields.every(function (x) {
+          return x.default !== null && x.default !== undefined && x.default !== "";
+        });
         return '<div class="fixrow">' +
           '<input type="checkbox" class="fsel" data-issue="' + esc(f.issue_id) +
-          '" data-rule="' + esc(rid) + '" data-kind="' + f.kind + '">' +
+          '" data-rule="' + esc(rid) + '" data-kind="' + f.kind + '"' +
+          (suggested ? ' data-suggested="1"' : "") + ">" +
           '<div class="body"><div class="what"><b>' + esc(f.element) + "</b> — " +
           esc(f.summary) +
           (f.destructive ? ' <span class="kind k-del">deletes</span>' : "") +
@@ -698,6 +713,9 @@
 
     wireFixes();
     $("fixBar").hidden = false;
+    var nSug = fixEls('.fsel[data-suggested="1"]').length;
+    $("fixAllSuggested").hidden = !nSug;
+    $("fixAllSuggested").textContent = "Select all suggestions (" + nSug + ")";
     updateFixCount();
   }
 
@@ -753,6 +771,14 @@
 
   $("fixAllAuto").addEventListener("click", function () {
     fixEls('.fsel[data-kind="auto"]').forEach(function (b) { b.checked = true; });
+    updateFixCount();
+  });
+
+  $("fixAllSuggested").addEventListener("click", function () {
+    var boxes = fixEls('.fsel[data-suggested="1"]');
+    boxes.forEach(function (b) { b.checked = true; });
+    // Open the groups so the suggested values can be reviewed before applying.
+    boxes.forEach(function (b) { b.closest("details").open = true; });
     updateFixCount();
   });
 

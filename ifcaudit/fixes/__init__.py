@@ -77,8 +77,6 @@ FIXERS: dict[str, Callable[[AuditContext, dict], Optional[Fix]]] = {}
 ADVICE: dict[str, str] = {
     "INT.NO_GEOMETRY": "Geometry can't be created here. Model the element, or "
                        "enable geometry export for its category, and re-export.",
-    "INT.PROXY_ELEMENT": "Map this family/category to a real IFC class in the "
-                         "exporter's class mapping and re-export.",
     "INT.NO_TYPE": "Enable type export in the authoring tool (or assign a type "
                    "there) and re-export.",
     "INT.MISSING_COMMON_PSET": "Enable the buildingSMART common property sets "
@@ -325,6 +323,12 @@ def _run_op(model, op: dict, removed: set[int], guids: list[dict]) -> None:
     elif kind == "set_georef":
         el.RefLatitude = _dms(op["lat"])
         el.RefLongitude = _dms(op["lon"])
+    elif kind == "reclass":
+        # Reclassing one occurrence reclasses its type and siblings, so a
+        # sibling's own fix may find the work already done.
+        if el.is_a() != op["value"]:
+            import ifcopenshell.api.root as root
+            root.reassign_class(model, product=el, ifc_class=op["value"])
     elif kind == "regen_guid":
         old = el.GlobalId
         el.GlobalId = ifcopenshell.guid.new()

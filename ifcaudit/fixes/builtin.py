@@ -215,6 +215,98 @@ def georeference(ctx: AuditContext, issue: dict) -> Optional[Fix]:
 
 
 # --------------------------------------------------------------------------
+# proxies: suggest a real class from the exported family / type name
+# --------------------------------------------------------------------------
+
+# First match wins, so specific words come before general ones ("Trim-Window"
+# is a trim, not a window). Matched against Name, ObjectType and the type's
+# name, which is where Revit puts "Family:Type".
+CLASS_HINTS: list[tuple[tuple[str, ...], str]] = [
+    (("mullion", "muntin"), "IfcMember"),
+    (("trim", "casing", "cornice", "corniche", "moulding", "molding", "skirting",
+      "baseboard", "fascia", "soffit", "cladding", "ceiling"), "IfcCovering"),
+    (("curtain wall", "curtainwall"), "IfcCurtainWall"),
+    (("railing", "handrail", "balustrade", "guardrail", "baluster"), "IfcRailing"),
+    (("stair",), "IfcStair"),
+    (("ramp",), "IfcRamp"),
+    (("door",), "IfcDoor"),
+    (("window",), "IfcWindow"),
+    (("wall",), "IfcWall"),
+    (("roof",), "IfcRoof"),
+    (("slab", "floor"), "IfcSlab"),
+    (("column", "pillar", "post"), "IfcColumn"),
+    (("beam", "joist", "girder", "lintel", "purlin"), "IfcBeam"),
+    (("footing", "foundation", "pile"), "IfcFooting"),
+    (("plate",), "IfcPlate"),
+    (("brace", "strut", "member"), "IfcMember"),
+    (("furniture", "chair", "table", "desk", "sofa", "bed", "cabinet",
+      "casework", "shelf", "wardrobe"), "IfcFurniture"),
+    (("sink", "toilet", "wc", "basin", "lavatory", "urinal", "shower",
+      "bath"), "IfcSanitaryTerminal"),
+    (("light", "lamp", "luminaire"), "IfcLightFixture"),
+    (("duct",), "IfcDuctSegment"),
+    (("pipe",), "IfcPipeSegment"),
+]
+COMMON_CLASSES = ["IfcWall", "IfcSlab", "IfcRoof", "IfcColumn", "IfcBeam",
+                  "IfcMember", "IfcPlate", "IfcCovering", "IfcDoor", "IfcWindow",
+                  "IfcCurtainWall", "IfcRailing", "IfcStair", "IfcRamp",
+                  "IfcFooting", "IfcFurniture", "IfcSanitaryTerminal",
+                  "IfcLightFixture", "IfcDuctSegment", "IfcPipeSegment"]
+
+
+def _suggest_class(texts: list[str]) -> tuple[Optional[str], Optional[str]]:
+    for text in texts:
+        low = text.lower()
+        for words, cls in CLASS_HINTS:
+            for w in words:
+                if re.search(rf"(?<![a-z]){re.escape(w)}", low):
+                    return cls, f"'{text}' contains '{w}'"
+    return None, None
+
+
+@fixer("INT.PROXY_ELEMENT")
+def proxy_element(ctx: AuditContext, issue: dict) -> Optional[Fix]:
+    group = _entities(ctx, issue)
+    if not group:
+        return None
+    el = group[0]
+    classes = [c for c in COMMON_CLASSES if _declared(ctx, c)]
+
+    element_type = ue.get_type(el)
+    texts = [t for t in (getattr(el, "Name", None), getattr(el, "ObjectType", None),
+                         getattr(element_type, "Name", None)) if t and str(t).strip()]
+    suggested, why = _suggest_class(texts)
+    if suggested not in classes:
+        suggested, why = None, None
+
+    detail = "Keeps its GlobalId, geometry, properties and relationships."
+    if element_type is not None:
+        siblings = len(ue.get_types(element_type))
+        if siblings > 1:
+            detail += (f" Its type is reclassified too, which also changes the "
+                       f"other {siblings - 1} element(s) of that type.")
+    return Fix(
+        issue_id=issue["id"], rule_id=issue["rule_id"], kind=INPUT,
+        summary="Change to a real IFC class",
+        detail=detail,
+        inferred=(f"{suggested}, because {why}." if suggested else None),
+        fields=[Field(name="cls", label="IFC class", type="select",
+                      default=suggested,
+                      options=[{"value": c, "label": c} for c in classes])],
+        ops=[{"op": "reclass", "id": el.id(), "value": {"$field": "cls"}}],
+    )
+
+
+def _declared(ctx: AuditContext, ifc_class: str) -> bool:
+    import ifcopenshell
+    try:
+        ifcopenshell.schema_by_name(ctx.model.schema).declaration_by_name(ifc_class)
+        return True
+    except Exception:
+        return False
+
+
+# --------------------------------------------------------------------------
 # IDS: the requirement names exactly what is missing
 # --------------------------------------------------------------------------
 

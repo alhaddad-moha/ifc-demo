@@ -37,6 +37,9 @@ def compare(before: list[dict], after: list[dict],
         "resolved_ids": sorted(before_ids - after_ids),
         "new_ids": sorted(set(new)),
     }
+    sev = {i["id"]: i.get("severity") for i in after}
+    out["new_by_severity"] = {s: sum(1 for i in set(new) if sev.get(i) == s)
+                              for s in ("error", "warning", "info")}
     if applied is not None:
         # A fix is verified only if its issue is gone from the re-audit.
         out["unresolved_fixes"] = [c["issue_id"] for c in applied

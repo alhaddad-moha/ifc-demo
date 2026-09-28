@@ -385,3 +385,5 @@ textarea.sql {
   .v3d-canvas { height: 60vh; }
   .v3d-side { max-height: none; }
 }
+
+.btn[hidden] { display: none; }
