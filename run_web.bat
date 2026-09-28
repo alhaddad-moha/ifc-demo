@@ -23,13 +23,20 @@ if not exist "examples\sample_model.ifc" (
     echo Generating the sample model...
     python tools\make_sample.py examples\sample_model.ifc
 )
+if not exist "examples\clean_model.ifc" (
+    echo Generating the defect-free sample model...
+    python tools\make_sample.py examples\clean_model.ifc --clean
+)
 if not exist "examples\project_requirements.ids" (
     echo Generating the example IDS ruleset...
     python tools\make_ids.py examples\project_requirements.ids
 )
 
-REM  Optional: enable natural-language questions by setting a key here.
-REM  set OPENAI_API_KEY=sk-...
+REM  Optional: the "Ask a question" box. Put your settings in ai_settings.bat
+REM  (copy ai_settings.example.bat); it is loaded here and never committed.
+if exist "ai_settings.bat" call ai_settings.bat
+
+set PYTHONUTF8=1
 
 echo.
 echo ===============================================================

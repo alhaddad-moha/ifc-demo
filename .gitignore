@@ -3,3 +3,6 @@ __pycache__/
 *.pyc
 reports/
 data/
+ai_settings.bat
+ai_settings.sh
+.env

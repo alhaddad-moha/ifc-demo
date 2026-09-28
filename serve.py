@@ -35,7 +35,9 @@ def main() -> int:
         return 1
 
     url = f"http://{'127.0.0.1' if args.host == '0.0.0.0' else args.host}:{args.port}"
-    print(f"\n  IFC Audit  →  {url}\n")
+    # ASCII only: a Windows console on a legacy code page can't print "→"
+    # and would crash the server before it starts.
+    print(f"\n  IFC Audit  ->  {url}\n")
 
     if not args.no_open and not args.reload:
         threading.Timer(1.5, lambda: webbrowser.open(url)).start()

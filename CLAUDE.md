@@ -27,7 +27,10 @@ python tools\make_ids.py examples\project_requirements.ids
 python serve.py
 ```
 
-`run_web.bat` and `run_demo.bat` do all of the above in one double-click.
+`run_web.bat` / `run_web.sh` and `run_demo.bat` do all of the above in one
+double-click. The launchers load `ai_settings.bat` / `ai_settings.sh` if present
+(git-ignored; templates are the `.example` files). User docs: `INSTALL.md`,
+`HOW_IT_WORKS.md`. Keep them in step with behaviour changes.
 
 ## Architecture
 
@@ -115,9 +118,11 @@ duplicated and the copy is byte-identical so STEP ids stay valid.
 
 **Fixers never invent values.** A fixer may *suggest* something derived
 deterministically from the model (storey from an element's z, the next storey
-elevation from the spacing) and must say how in `inferred`. Fire ratings,
+elevation from the spacing, a proxy's IFC class from keywords in its Revit
+family/type name via `CLASS_HINTS`) and must say how in `inferred`. "Select all
+suggestions" in the UI ticks exactly those; the user still presses Apply. Fire ratings,
 materials, coordinates and the like always come from the user. Issues that
-can't be repaired in the IFC (no geometry, proxies, schema violations) are
+can't be repaired in the IFC (no geometry, missing types, schema violations) are
 `MANUAL` with advice text, never a guess.
 
 ## Adding a rule

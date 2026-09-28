@@ -3,10 +3,18 @@
 Upload an IFC file. The system runs the whole analysis and gives you the
 report. No canvas, no nodes, no configuration.
 
+> **New here?** [INSTALL.md](INSTALL.md) is a step-by-step guide to installing
+> and using it: no programming needed. [HOW_IT_WORKS.md](HOW_IT_WORKS.md)
+> explains the whole flow and each step in detail.
+
 Two ways in:
 
-- **`run_web.bat`** → the web app at <http://127.0.0.1:8000>
+- **`run_web.bat`** (Windows) / **`run_web.sh`** (macOS, Linux) → the web app at <http://127.0.0.1:8000>
 - **`run_demo.bat`** → the CLI, same engine, for scripts and CI
+
+What you get: schema, integrity and IDS checks; a **Fix** tab that repairs
+issues on a copy of the file and re-audits it; a **3D** view coloured by
+issue severity; and an **Ask** box that answers questions with SQL.
 
 | Layer | What it checks | Status |
 |---|---|---|
@@ -20,9 +28,10 @@ Two ways in:
 
 ## Quick start (Windows)
 
-Double-click **`run_web.bat`**. It creates a virtual environment, installs
-dependencies, generates a sample model with deliberate defects plus an example
-IDS, and opens the browser.
+Double-click **`run_web.bat`** (macOS/Linux: `./run_web.sh`). It creates a
+virtual environment, installs dependencies, generates a sample model with
+deliberate defects, a defect-free one and an example IDS, and opens the
+browser. Full walkthrough: [INSTALL.md](INSTALL.md).
 
 Drop `examples\sample_model.ifc` onto the page to see the whole thing work.
 
@@ -47,15 +56,17 @@ python serve.py
 A fixed, declared pipeline — `webapp/jobs.py`, `STEP_LABELS`:
 
 ```
-receive → parse → validate schema → check IDS → run rules
+receive → [apply fixes] → parse → validate schema → check IDS → run rules
         → build SQLite database → generate reports
 ```
+
+(`apply fixes` only runs for a fixed copy. Details: [HOW_IT_WORKS.md](HOW_IT_WORKS.md).)
 
 It runs in a background thread and the browser polls for progress, so a large
 model never has to survive a request timeout. Each step reports what it is
 doing rather than showing a spinner.
 
-### The four tabs
+### The six tabs
 
 **Overview** — KPI row, severity distribution, IDS pass/fail per specification,
 element breakdown by class.
@@ -76,22 +87,35 @@ LEFT JOIN psets p ON p.ifc_id = d.ifc_id AND p.name = 'FireRating'
 There is a SQL console with worked examples, and an **Ask** box that turns a
 plain question into SQL. See *Natural-language questions* below.
 
+**Fix** — a proposed fix for every issue: *Auto* (unambiguous, just approve),
+*Needs a value* (you supply or confirm it; some are pre-filled with a
+suggestion and its reason), or *Manual* (advice for the authoring tool).
+Approved fixes are applied to a **copy**, which is re-audited and compared
+with the original: resolved, new, remaining. The uploaded file is never
+modified.
+
+**3D** — the model rendered with three.js + web-ifc, coloured by the most
+serious issue on each element. Click an element to see its issues; *view in
+3D* on any issue flies to it. X-ray, isolate and a section slider. Needs
+internet the first time (the 3D engine loads from jsDelivr).
+
 **Downloads** — HTML report, Excel workbook, issues CSV, JSON, the SQLite
-database, and the original IFC.
+database, and the IFC. A fixed copy also offers the untouched original and a
+change log.
 
 ---
 
 ## Natural-language questions
 
-Optional. Set a key **before** starting the server:
+Optional. Copy `ai_settings.example.bat` to `ai_settings.bat` (macOS/Linux:
+the `.sh` pair), fill in one provider, and start the app; the launcher loads
+it. Claude, OpenAI and OpenRouter all work. The file is git-ignored.
+Step-by-step: [INSTALL.md, Part 3](INSTALL.md#part-3-turn-on-the-ask-box-optional).
 
-```bat
-set OPENAI_API_KEY=sk-...
-python serve.py
-```
-
-`OPENROUTER_API_KEY` works too; `IFC_NLQ_MODEL` picks the model (default
-`gpt-4o-mini`).
+The audit itself is also in the database (`audit_*` tables), so questions like
+*"what are the most serious issues?"* work too. The model writes the answer
+sentence as a template with `{placeholders}` that are filled from the query
+result, so it never writes a number itself.
 
 How it works, and why it is built this way:
 
@@ -138,7 +162,11 @@ if errorlevel 1 echo Model rejected
 ifc-demo/
 ├── serve.py                    start the web app
 ├── audit.py                    CLI entry point
-├── run_web.bat / run_demo.bat  one-click launchers
+├── run_web.bat / run_web.sh    one-click launchers (web app)
+├── run_demo.bat                one-click CLI demo
+├── ai_settings.example.*       template for the optional AI key
+├── INSTALL.md                  install + step-by-step usage
+├── HOW_IT_WORKS.md             the flow and each step in detail
 │
 ├── ifcaudit/                   the engine — knows nothing about HTTP
 │   ├── issues.py               Issue / ElementRef / AuditResult
@@ -149,7 +177,9 @@ ifc-demo/
 │   │   ├── project.py          L0/L1 — units, georeferencing, spatial structure
 │   │   ├── schema_check.py     L0 — ifcopenshell.validate adapter
 │   │   └── ids_runner.py       L2 — IfcTester/IDS adapter
-│   └── report/                 console / html / json
+│   ├── report/                 console / html / json
+│   ├── fixes/                  fix proposals (@fixer) and the apply engine
+│   └── diff.py                 run-to-run diff on the stable issue ids
 │
 ├── webapp/                     the web layer
 │   ├── main.py                 FastAPI routes
@@ -157,11 +187,11 @@ ifc-demo/
 │   ├── sql_export.py           IFC → SQLite, read-only query guard
 │   ├── nlq.py                  question → SQL → answer
 │   ├── exports.py              Excel workbook + CSV
-│   └── static/                 index.html, app.js, styles.css (no build step)
+│   └── static/                 index.html, app.js, styles.css, viewer.js (no build step)
 │
 ├── tools/                      sample model + IDS generators
 ├── tests/
-│   ├── test_e2e.py             28 browser checks over the real app
+│   ├── test_e2e.py             36 browser checks over the real app
 │   └── test_nlq_stub.py        text-to-SQL plumbing, no API key needed
 └── examples/
 ```
@@ -180,10 +210,12 @@ python serve.py --no-open --port 8112      REM terminal 1
 python tests\test_e2e.py                   REM terminal 2
 ```
 
-28 checks: upload, pipeline completion, KPI values, severity bar, IDS table,
+36 checks: upload, pipeline completion, KPI values, severity bar, IDS table,
 issue grouping, both filters, SQL console, example queries, the safety guard,
 honest degradation of Ask, all six downloads (the .xlsx is downloaded and size-
-checked), reopening a finished run, and zero uncaught JS errors.
+checked), reopening a finished run, the 3D model loading and "view in 3D",
+applying auto fixes to a copy with a verified re-audit, and zero uncaught JS
+errors.
 
 **Text-to-SQL, without an API key** — stands up a stub OpenAI-compatible server
 and checks the whole chain including markdown-fence stripping:
@@ -211,7 +243,7 @@ defects; the ruleset catches all twelve:
 | Windows missing ThermalTransmittance | `IDS.Windows declare thermal transmittance` |
 
 Current run on the sample: **21 errors, 35 warnings, 54 info** over 29 elements,
-27 SQLite tables, about 3 seconds end to end.
+31 SQLite tables, about 3 seconds end to end.
 
 ---
 
@@ -302,15 +334,12 @@ still audits in seconds. Two things to get right first: **check georeferencing**
 a million, silently), and **group results** (one pipe through forty studs is one
 issue, not forty).
 
-**3D viewer.** "Click an issue → see the element highlighted" is the next big
-usability jump. `Issue.location` and the stable ids are already in place. Build
-it on `web-ifc` + `three.js` directly.
-
 **BCF export.** Without it, issues can't round-trip into Revit / Navisworks /
 BIMcollab.
 
-**Run-to-run diffing.** The stable ids make this ~40 lines: load the previous
-JSON, compare id sets, report new / resolved / persisting.
+**Run-to-run diffing between separate uploads.** `ifcaudit/diff.py` already
+compares a fixed copy with its source; comparing two independent uploads of
+the same model (and a CLI `--baseline` flag) is the remaining step.
 
 **Production concerns.** Jobs live in memory and files on local disk, which is
 right for a single-machine tool and wrong for a multi-user service — that needs
