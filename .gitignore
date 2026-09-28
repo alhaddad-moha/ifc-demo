@@ -6,3 +6,5 @@ data/
 ai_settings.bat
 ai_settings.sh
 .env
+.idea/
+.vscode/

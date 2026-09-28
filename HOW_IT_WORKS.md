@@ -11,18 +11,16 @@ and the design rules that keep the results trustworthy.
 
 ## 1. The big picture
 
-```mermaid
-flowchart LR
-    U([User]) -->|uploads .ifc| W[Web app<br/>webapp/]
-    CLI([audit.py]) --> E
-    W --> E[Audit engine<br/>ifcaudit/]
-    E --> R[(Issues)]
-    R --> REP[Reports<br/>HTML · Excel · CSV · JSON]
-    R --> DB[(SQLite<br/>model + audit)]
-    R --> FIX[Fix proposals]
-    R --> V3D[3D viewer]
-    DB --> ASK[Ask box<br/>question → SQL]
-    FIX -->|approved| COPY[Fixed copy] -->|re-audit| E
+```text
+  User ──uploads .ifc──► Web app (webapp/) ──┐
+                                             ├──► Audit engine (ifcaudit/) ──► Issues
+  Script / CI ─────────► audit.py (CLI) ─────┘            ▲                     │
+                                                          │                     ├──► Reports: HTML, Excel, CSV, JSON
+                                                          │                     ├──► SQLite: model + audit ──► Ask box (question → SQL)
+                                                          │                     ├──► 3D viewer (coloured by issue)
+                                                          │                     └──► Fix proposals
+                                                          │                              │
+                                                          └──── re-audit ◄── Fixed copy ◄┘ (approved by the user)
 ```
 
 There are two front doors to one engine:
@@ -44,18 +42,31 @@ The user configures nothing. A fixed sequence of steps runs in a background
 thread, and the browser polls for progress. The sequence is declared once in
 `STEP_LABELS` in `webapp/jobs.py`:
 
-```mermaid
-flowchart TD
-    A[1 · Receive file] --> F{Fixed copy?}
-    F -->|yes| FX[1b · Apply approved fixes]
-    F -->|no| B
-    FX --> B[2 · Parse IFC]
-    B --> C[3 · Validate schema]
-    C --> D[4 · Check IDS requirements]
-    D --> E2[5 · Run integrity rules]
-    E2 --> G[6 · Build SQLite database]
-    G --> H[7 · Generate reports]
-    H --> Z([Done: results page])
+```text
+  1. Receive file
+        │
+        ├── fixed copy? ──yes──► 1b. Apply approved fixes ──┐
+        │                                                   │
+        ▼ no                                                │
+  2. Parse IFC  ◄───────────────────────────────────────────┘
+        │
+        ▼
+  3. Validate schema            (L0: IFC schema + EXPRESS rules)
+        │
+        ▼
+  4. Check IDS requirements     (L2: IfcTester)
+        │
+        ▼
+  5. Run integrity rules        (L1: 18 rules)
+        │
+        ▼
+  6. Build SQLite database      (model tables + audit_* tables)
+        │
+        ▼
+  7. Generate reports           (HTML, Excel, CSV, JSON)
+        │
+        ▼
+     Done: results page
 ```
 
 ### Step 1: Receive
@@ -189,18 +200,17 @@ text (matches rule, element name, GUID, storey, description).
 
 ### 3D tab
 
-```mermaid
-sequenceDiagram
-    participant B as Browser
-    participant S as Server
-    participant CDN as jsDelivr
-    B->>CDN: three.js + web-ifc (first time only)
-    B->>S: GET /api/jobs/{id}/elements
-    S-->>B: [{id, guid, class, name, storey}]
-    B->>S: GET /api/jobs/{id}/download/ifc
-    S-->>B: model.ifc
-    Note over B: web-ifc tessellates the model in the browser<br/>three.js draws it
-    Note over B: mesh expressID = STEP id → element → GUID → issues
+```text
+  Browser                               Server                     jsDelivr (CDN)
+     │                                     │                             │
+     │── three.js + web-ifc (first time) ─────────────────────────────►  │
+     │── GET /api/jobs/{id}/elements ────►│                             │
+     │◄── [{id, guid, class, name, storey}]│                             │
+     │── GET /api/jobs/{id}/download/ifc ►│                             │
+     │◄── model.ifc ───────────────────────│                             │
+     │
+     ├─ web-ifc turns the IFC into triangles, three.js draws them
+     └─ each mesh: expressID = STEP id → element → GUID → its issues → colour
 ```
 
 - **web-ifc** (WebAssembly) turns the IFC into triangles inside the browser;
@@ -217,21 +227,23 @@ sequenceDiagram
 
 ## 5. Fixing issues
 
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant B as Browser
-    participant S as Server
-    U->>B: open Fix tab
-    B->>S: GET /api/jobs/{id}/fixes
-    S-->>B: proposals (kind, summary, fields, suggestion)
-    U->>B: tick fixes, fill values, Apply
-    B->>S: POST /fixes/apply {issue_id, values}[]
-    Note over S: validate values against the server's own proposals
-    S-->>B: new run id
-    Note over S: copy original.ifc → apply ops → model.ifc<br/>write changes.json → full re-audit → diff
-    B->>S: poll, then GET result
-    S-->>B: new results + "resolved / new" banner
+```text
+  User              Browser                                  Server
+   │                   │                                        │
+   │── open Fix tab ──►│── GET /api/jobs/{id}/fixes ──────────►│
+   │                   │◄── proposals (kind, fields, suggestion)│
+   │── tick, fill, ───►│                                        │
+   │   Apply           │── POST /fixes/apply {issue_id,values} ►│
+   │                   │                                        ├─ check values against its own proposals
+   │                   │◄── new run id ─────────────────────────│
+   │                   │                                        ├─ copy source → original.ifc (untouched)
+   │                   │                                        ├─ apply fixes → model.ifc
+   │                   │                                        ├─ write changes.json
+   │                   │                                        ├─ full re-audit of the copy
+   │                   │                                        └─ diff against the source run
+   │                   │── poll, then GET result ─────────────►│
+   │◄── results + ─────│◄── new results ────────────────────────│
+   │    "resolved / new" banner                                 │
 ```
 
 ### 5.1 Proposals
@@ -305,17 +317,27 @@ parent.
 
 ## 6. Asking questions
 
-```mermaid
-flowchart LR
-    Q[Question] --> P[Prompt:<br/>real schema + notes<br/>+ worked examples]
-    P --> M[Language model]
-    M --> J["{sql, answer template}"]
-    J --> G{Guard:<br/>one SELECT,<br/>read-only?}
-    G -->|no| X[Refused, shown as error]
-    G -->|yes| DB[(SQLite, read-only)]
-    DB --> ROWS[Rows]
-    ROWS --> T[Fill template<br/>from rows]
-    T --> A[Answer + table + SQL]
+```text
+  Question
+     │
+     ▼
+  Prompt = real database schema + notes + worked examples
+     │
+     ▼
+  Language model ──► { "sql": "SELECT …", "answer": "There are {errors} errors…" }
+     │
+     ▼
+  Guard: one statement, SELECT/WITH only, no PRAGMA/ATTACH/writes?
+     │                         │
+     no                        yes
+     ▼                         ▼
+  Refused, shown          Run on SQLite (read-only connection)
+  as an error                  │
+                               ▼
+                          Rows ──► fill {placeholders} from the rows
+                               │   (template dropped if it has its own digits)
+                               ▼
+                          Answer sentence + table + the SQL used
 ```
 
 1. The model is given the **real database schema** (including the `audit_*`
