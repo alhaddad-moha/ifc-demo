@@ -36,17 +36,27 @@ Homebrew: `brew install python@3.13`. Check with `python3 --version`.
 > wasn't ticked. Re-run the installer, choose **Modify**, and enable
 > "Add Python to environment variables".
 
-### Step 2: Get the IFC Audit folder
+### Step 2: Download IFC Audit from GitHub
 
-Either:
+Pick **one** way.
 
-- **From a zip** someone sent you: unzip it somewhere simple, e.g.
-  `C:\Tools\ifc-audit`. Avoid putting it inside OneDrive or a path with
-  unusual characters.
-- **From git**, if you were given a repository link:
-  ```bash
-  git clone <repository-url> ifc-audit
-  ```
+**A. Download ZIP (easiest, no git needed)**
+1. Open the project's GitHub page.
+2. Click the green **Code** button → **Download ZIP**.
+3. Unzip it somewhere simple, e.g. `C:\Tools\ifc-audit`. GitHub names the
+   folder `<repo>-main`; you can rename it.
+
+**B. Clone with git (easier to update later)**
+1. Install git if you don't have it: <https://git-scm.com/downloads>.
+2. Open PowerShell (or Terminal) where you want the folder and run:
+   ```bash
+   git clone https://github.com/<owner>/<repo>.git ifc-audit
+   cd ifc-audit
+   ```
+   Copy the exact URL from the green **Code** button on the GitHub page.
+
+Either way, avoid putting the folder inside OneDrive/Dropbox or a path with
+unusual characters: the first start writes a lot of small files.
 
 The folder should contain `run_web.bat`, `run_web.sh`, `serve.py` and
 `requirements.txt`.
@@ -174,6 +184,25 @@ To turn the Ask box on, see **Part 3**.
   app stops**. The files stay on disk under `data\<run-id>\`; re-upload the
   model to see a run again.
 
+### Step 10: Update to the latest version
+
+Stop the app first (Ctrl+C), then:
+
+- **If you cloned with git** (Step 2B), in the folder:
+  ```bash
+  git pull
+  ```
+- **If you downloaded the ZIP** (Step 2A): download the new ZIP and unzip it
+  over a fresh folder. To keep your settings, copy your `ai_settings.bat` (and
+  `data\` if you want old runs) from the old folder into the new one.
+
+Then start the app as usual. If the update added new libraries and
+something fails to start, delete the `.venv` folder and start again: it
+reinstalls cleanly.
+
+Your own files (`ai_settings.bat`, `data\`, `.venv\`) are ignored by git, so
+`git pull` never overwrites or uploads them.
+
 ---
 
 ## Part 3: Turn on the Ask box (optional)
@@ -228,19 +257,19 @@ errors are found. `python audit.py --help` lists every option.
 | **Ask: "credit balance is too low"** | Add credit on the provider's console. A subscription doesn't include API usage. |
 | **Ask: "anthropic-workspace-id header"** | Set `ANTHROPIC_WORKSPACE_ID` in `ai_settings.bat`, or create the key inside a workspace. |
 | **Everything is broken after an update** | Delete the `.venv` folder and start again. It reinstalls cleanly. |
+| **`git pull` says "local changes would be overwritten"** | You edited a tracked file. Keep your version aside, then run `git stash`, `git pull`, and `git stash pop`, or just re-clone. |
+| **`./run_web.sh: Permission denied`** (macOS/Linux) | Run `chmod +x run_web.sh` once. |
 
 ---
 
 ## Sharing it with others
 
-To make a clean zip without your private files (`.venv`, `data`, keys), run
-this in the folder (needs git):
+Send them the GitHub link. They start from **Part 1**.
 
-```bash
-git archive --format=zip -o ifc-audit.zip HEAD
-```
-
-Send `ifc-audit.zip`. The receiver starts from **Part 1**.
+Never commit your `ai_settings.bat`, `.venv\` or `data\` (your models): they
+are listed in `.gitignore`, so `git add` skips them. If an API key ever does
+reach GitHub, even briefly, **revoke it immediately**: public repositories are
+scanned for keys within minutes.
 
 ---
 

@@ -26,9 +26,19 @@ issue severity; and an **Ask** box that answers questions with SQL.
 
 ---
 
-## Quick start (Windows)
+## Quick start
 
-Double-click **`run_web.bat`** (macOS/Linux: `./run_web.sh`). It creates a
+Needs **Python 3.10–3.13** ([python.org](https://www.python.org/downloads/);
+on Windows tick *Add python.exe to PATH*).
+
+```bash
+git clone https://github.com/<owner>/<repo>.git ifc-audit
+cd ifc-audit
+```
+
+No git? Use **Code → Download ZIP** on this page and unzip it.
+
+Then double-click **`run_web.bat`** (macOS/Linux: `./run_web.sh`). It creates a
 virtual environment, installs dependencies, generates a sample model with
 deliberate defects, a defect-free one and an example IDS, and opens the
 browser. Full walkthrough: [INSTALL.md](INSTALL.md).
